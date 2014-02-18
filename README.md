@@ -7,6 +7,6 @@ Usage
     
     ctx = ini_load("test.ini");
     if (!ctx) return;
-    printf("string get %s\n", ini\_get\_string(ctx, "section\_name", "element\_name", "default_value"));
+    printf("string get %s\n", ini_get_string(ctx, "section_name", "element_name", "default_value"));
     ini_unload(ctx);
 
