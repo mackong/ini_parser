@@ -75,7 +75,7 @@ static struct ini_context *parse_file(FILE *fp)
                         tmp = strtok(NULL, "=");
                         elem->value = strdup(tmp);
                         /** trim whitespaces for name and value */
-                        tmp = elem->value;
+                        tmp = elem->name;
                         while (*tmp) {
                                 if (*tmp == ' ') {
                                         *tmp = '\0';
@@ -85,7 +85,7 @@ static struct ini_context *parse_file(FILE *fp)
                         }
                         tmp = elem->value;
                         while (*tmp) {
-                                if (*tmp == ' ') {
+                                if (*tmp == '\n') {
                                         *tmp = '\0';
                                         break;
                                 }
