@@ -13,10 +13,9 @@
 
 struct ini_context;
 
-struct ini_context *
-ini_load(const char *filename);
-
+struct ini_context *ini_load(const char *filename);
 void ini_unload(struct ini_context *ctx);
+void ini_dump(struct ini_context *ctx);
 
 char *ini_get_string(struct ini_context *ctx, const char *sec_name,
                      const char *elem_name, char *default_value);
@@ -27,18 +26,4 @@ int ini_get_bool(struct ini_context *ctx, const char *sec_name,
                  const char *elem_name, int default_value);
 
 #endif /* _INI_PARSER_H_ */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

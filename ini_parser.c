@@ -3,24 +3,24 @@
 #include <malloc.h>
 #include <stdlib.h>
 
-#include "list.h"
+#include "queue.h"
 #include "ini_parser.h"
 
 struct ini_element {
         char *name; /** element name */
         char *value; /** element value */
-        LIST_ENTRY(ini_element) field;
+        SIMPLEQ_ENTRY(ini_element) next;
 };
 
 struct ini_section {
         char *name; /** section name */
-        LIST_ENTRY(ini_section) field;
-        LIST_HEAD(elem_head, ini_element) elem_head;
+        SIMPLEQ_ENTRY(ini_section) next;
+        SIMPLEQ_HEAD(elem_head, ini_element) elem_head;
 };
 
 struct ini_context {
         char *name; /** context name, just filename here */
-        LIST_HEAD(sec_head, ini_section) sec_head;
+        SIMPLEQ_HEAD(sec_head, ini_section) sec_head;
 };
         
 static struct ini_context *parse_file(FILE *fp)
@@ -35,7 +35,7 @@ static struct ini_context *parse_file(FILE *fp)
         if (!ctx) {
                 return NULL;
         }
-        LIST_INIT(&ctx->sec_head);
+        SIMPLEQ_INIT(&ctx->sec_head);
         
         while ((read = getline(&line, &len, fp)) != -1) {
                 char *p = line;
@@ -47,7 +47,7 @@ static struct ini_context *parse_file(FILE *fp)
                         p++; /** skip [ */
                         last_sec = (struct ini_section *)
                                 malloc(sizeof(*last_sec));
-                        LIST_INIT(&last_sec->elem_head);
+                        SIMPLEQ_INIT(&last_sec->elem_head);
                         if (!last_sec) continue;
                         /** trim whitespaces between [ and section name */
                         while (*p == ' ')p++;
@@ -64,7 +64,7 @@ static struct ini_context *parse_file(FILE *fp)
                         }
 
                         /** Insert the section to context */
-                        LIST_INSERT_HEAD(&ctx->sec_head, last_sec, field);
+                        SIMPLEQ_INSERT_TAIL(&ctx->sec_head, last_sec, next);
                 } else { /** element */
                         struct ini_element *elem = NULL;
                         char *tmp = NULL;
@@ -73,6 +73,7 @@ static struct ini_context *parse_file(FILE *fp)
                         tmp = strtok(p, "=");
                         elem->name = strdup(tmp);
                         tmp = strtok(NULL, "=");
+                        while (*tmp == ' ')tmp++; /** trim leading whitespaces */
                         elem->value = strdup(tmp);
                         /** trim whitespaces for name and value */
                         tmp = elem->name;
@@ -91,7 +92,7 @@ static struct ini_context *parse_file(FILE *fp)
                                 }
                                 tmp++;
                         }
-                        LIST_INSERT_HEAD(&last_sec->elem_head, elem, field);
+                        SIMPLEQ_INSERT_TAIL(&last_sec->elem_head, elem, next);
                 }
         }
         free(line);
@@ -123,32 +124,47 @@ struct ini_context *ini_load(const char *filename)
 
 void ini_unload(struct ini_context *ctx)
 {
-        struct ini_section *sec_head = NULL;
-        struct ini_element *elem_head = NULL;
+        struct ini_section *sec = NULL;
+        struct ini_element *elem = NULL;
         
         if (!ctx) {
                 return;
         }
 
-        while (sec_head = LIST_FIRST(&(ctx->sec_head))) {
-                struct ini_section *sec = LIST_NEXT(sec_head, field);
-                LIST_REMOVE(sec_head, field);
-                while (elem_head = LIST_FIRST(&(sec_head->elem_head))) {
-                        struct ini_element *elem = LIST_NEXT(elem_head, field);
-                        LIST_REMOVE(elem_head, field);
-                        free(elem_head->name);
-                        free(elem_head->value);
-                        free(elem_head);
-                        elem_head = elem;
+        while (!SIMPLEQ_EMPTY(&ctx->sec_head)) {
+                sec = SIMPLEQ_FIRST(&ctx->sec_head);
+                SIMPLEQ_REMOVE_HEAD(&ctx->sec_head, next);
+                while (!SIMPLEQ_EMPTY(&sec->elem_head)) {
+                        elem = SIMPLEQ_FIRST(&sec->elem_head);
+                        SIMPLEQ_REMOVE_HEAD(&sec->elem_head, next);
+                        free(elem->name);
+                        free(elem->value);
+                        free(elem);
                 }
-                free(sec_head->name);
-                free(sec_head);
-                sec_head = sec;
+                free(sec->name);
+                free(sec);
         }
 
         free(ctx->name);
         free(ctx);
         ctx = NULL;
+}
+
+void ini_dump(struct ini_context *ctx)
+{
+        struct ini_section *sec = NULL;
+        struct ini_element *elem = NULL;
+        
+        if (!ctx) {
+                return;
+        }
+        
+        SIMPLEQ_FOREACH(sec, &(ctx->sec_head), next) {
+                printf("[%s]\n", sec->name);
+                SIMPLEQ_FOREACH(elem, &(sec->elem_head), next) {
+                        printf("%s=%s\n", elem->name, elem->value);
+                }
+        }
 }
 
 char *ini_get_string(struct ini_context *ctx, const char *sec_name,
@@ -161,11 +177,11 @@ char *ini_get_string(struct ini_context *ctx, const char *sec_name,
                 return default_value;
         }
 
-        LIST_FOREACH(sec, &(ctx->sec_head), field) {
+        SIMPLEQ_FOREACH(sec, &(ctx->sec_head), next) {
                 if (strcmp(sec->name, sec_name) != 0) {
                         continue;
                 }
-                LIST_FOREACH(elem, &(sec->elem_head), field) {
+                SIMPLEQ_FOREACH(elem, &(sec->elem_head), next) {
                         if (strcmp(elem->name, elem_name) == 0) {
                                 return elem->value;
                         }
@@ -207,6 +223,9 @@ int main(int argc, char **argv)
         struct ini_context *ctx = NULL;
         
         ctx = ini_load(argv[1]);
+        ini_dump(ctx);
+        printf("sec1->elem1 = %s\n",
+               ini_get_string(ctx, "test_section1", "test_element1", "test1"));
         printf("name = %s\n", ini_get_string(ctx, "test", "name", "mackong"));
         ini_unload(ctx);
         
